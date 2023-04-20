@@ -9,12 +9,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         "Invalid number selected. Please try again.";
       return;
     }
+    showLoadingIndicator();
     convertCurrency(amount);
   });
 });
 
 function getSelectionText() {
   return window.getSelection().toString();
+}
+
+function showLoadingIndicator() {
+  document.getElementById("result").innerText = "Converting...";
 }
 
 async function convertCurrency(amount) {
@@ -25,14 +30,7 @@ async function convertCurrency(amount) {
   const corsProxyUrl = "https://thingproxy.freeboard.io/fetch/";
 
   try {
-    const response = await fetch(corsProxyUrl + url);
-    const data = await response.json();
-
-    if (data.result !== 'success') {
-      throw new Error('Error fetching exchange rates');
-    }
-
-    const rate = data.conversion_rate;
+    let rate = await getExchangeRate(fromCurrency, toCurrency, corsProxyUrl + url);
     const convertedAmount = (amount * rate).toFixed(2);
     document.getElementById("result").innerText = `${amount.toLocaleString()} ${fromCurrency} is approximately ${convertedAmount.toLocaleString()} ${toCurrency}.`;
   } catch (error) {
@@ -40,6 +38,32 @@ async function convertCurrency(amount) {
     document.getElementById("result").innerText =
       "An error occurred while fetching exchange rates. Please try again later.";
   }
+}
+
+async function getExchangeRate(fromCurrency, toCurrency, url) {
+  const cacheKey = `${fromCurrency}_${toCurrency}`;
+  const cachedData = localStorage.getItem(cacheKey);
+
+  if (cachedData) {
+    const { rate, timestamp } = JSON.parse(cachedData);
+    const now = Date.now();
+    const oneHour = 60 * 60 * 1000;
+    if (now - timestamp < oneHour) {
+      return rate;
+    }
+  }
+
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (data.result !== 'success') {
+    throw new Error('Error fetching exchange rates');
+  }
+
+  const rate = data.conversion_rate;
+  const timestamp = Date.now();
+  localStorage.setItem(cacheKey, JSON.stringify({ rate, timestamp }));
+  return rate;
 }
 
 
